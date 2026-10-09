@@ -3,5 +3,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 # runtime data lives in ~/garage-radar on the Pi; never commit a local data dir
-data/
-recordings/
+/data/
+/recordings/

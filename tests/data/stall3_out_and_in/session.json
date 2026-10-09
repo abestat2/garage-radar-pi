@@ -1,0 +1,371 @@
+{
+  "name": "session",
+  "created": "2026-10-08T18:48:40",
+  "app_version": "0.1.0",
+  "source": "live",
+  "test_type": "",
+  "serial_settings": {
+    "cli_port": "COM53",
+    "cli_baud": 115200,
+    "data_port": "COM54",
+    "data_baud": 921600
+  },
+  "device_info": {
+    "responded": true,
+    "fields": {
+      "Platform": "xWR68xx",
+      "mmWave SDK Version": "03.05.00.04",
+      "Device Info": "IWR68XX QM non-secure ES 02.00",
+      "RF F/W Version": "06.03.02.06.20.08.11",
+      "RF F/W Patch": "00.00.00.00.00.00.00",
+      "mmWaveLink Version": "01.02.06.06",
+      "Lot number": "4226697",
+      "Wafer number": "20",
+      "Die coordinates in wafer": "X = 14, Y = 12"
+    },
+    "raw": "version\nPlatform                : xWR68xx\nmmWave SDK Version      : 03.05.00.04\nDevice Info             : IWR68XX QM non-secure ES 02.00\nRF F/W Version          : 06.03.02.06.20.08.11\nRF F/W Patch            : 00.00.00.00.00.00.00\nmmWaveLink Version      : 01.02.06.06\nLot number              : 4226697\nWafer number            : 20\nDie coordinates in wafer: X = 14, Y = 12\nDone"
+  },
+  "radar_config_name": "iwr6843_garage_v2.cfg",
+  "radar_params": {
+    "frame_period_ms": 250.0,
+    "clutter_removal": false,
+    "cfar_range_threshold_db": 6.0,
+    "cfar_doppler_threshold_db": 10.0,
+    "cfar_max_range_m": 15.0,
+    "aoa_az_limit_deg": 90.0,
+    "aoa_el_limit_deg": 90.0
+  },
+  "derived_radar_params": {
+    "start_freq_ghz": 60.0,
+    "bandwidth_mhz": 1965.828373968132,
+    "range_resolution_m": 0.07625092352158204,
+    "max_range_m": 17.5682127793725,
+    "velocity_resolution_mps": 0.7983849472449077,
+    "max_velocity_mps": 6.387079577959262,
+    "frame_period_ms": 250.0,
+    "frame_rate_hz": 4.0,
+    "num_tx": 3,
+    "num_rx": 4,
+    "chirps_per_frame": 48,
+    "adc_samples": 256
+  },
+  "detection_params": {
+    "min_range": 0.3,
+    "max_range": 12.0,
+    "min_snr_db": 6.0,
+    "min_signal_db": 0.0,
+    "background_removal": false,
+    "background_threshold": 0.15,
+    "background_voxel": 0.2,
+    "min_abs_doppler": 0.0,
+    "max_abs_doppler": 10.0,
+    "clip_to_garage": true,
+    "garage_margin": 0.2,
+    "x_min": -50.0,
+    "x_max": 50.0,
+    "y_min": -50.0,
+    "y_max": 50.0,
+    "z_min": 0.1,
+    "z_max": 2.0,
+    "accumulation_s": 1.0,
+    "cluster_eps": 0.5,
+    "cluster_z_weight": 0.5,
+    "cluster_min_points": 8,
+    "cluster_max_points": 3000,
+    "cluster_merge_distance": 0.6,
+    "track_gate": 1.5,
+    "cluster_persistence_s": 0.5,
+    "cluster_disappearance_s": 3.0,
+    "veh_min_width": 1.0,
+    "veh_max_width": 2.6,
+    "veh_min_depth": 1.5,
+    "veh_max_depth": 6.5,
+    "veh_min_height": 0.7,
+    "veh_max_height": 2.5,
+    "veh_min_area": 2.0,
+    "movement_threshold": 0.2,
+    "movement_min_displacement": 0.3,
+    "vehicle_persistence_s": 2.0,
+    "departure_persistence_s": 3.0,
+    "stall_min_fraction": 0.5,
+    "stall_min_points": 10,
+    "occupancy_persistence_s": 5.0,
+    "empty_persistence_s": 5.0,
+    "min_fov_coverage": 0.5,
+    "sensor_timeout_s": 2.0,
+    "occ_change_db": 6.0,
+    "occ_window_frames": 8,
+    "occ_assumed_height": 0.8,
+    "occ_hysteresis": 0.2,
+    "entry_approach_m": 3.5,
+    "motion_min_speed": 0.3,
+    "motion_min_points": 4,
+    "motion_window_s": 2.0,
+    "entering_timeout_s": 15.0,
+    "occ_edge_margin": 0.25,
+    "occ_adapt_tau_s": 300.0,
+    "occ_adapt_empty_hold_s": 120.0
+  },
+  "occupancy_status": "ready - reference of 315 heatmaps, calibrated",
+  "garage": {
+    "coordinate_system": "metres; origin = inside corner of door wall and left wall; +X along door wall, +Y toward back wall, +Z up",
+    "width": 9.50976,
+    "depth": 7.4676,
+    "ceiling_height": 2.9337,
+    "doors": [
+      {
+        "width": 4.8768,
+        "height": 2.1336,
+        "x_left": 4.1452800000000005,
+        "bottom": 0.0,
+        "y": 0.0
+      },
+      {
+        "width": 2.4384,
+        "height": 2.1336,
+        "x_left": 0.4876799999999988,
+        "bottom": 0.0,
+        "y": 0.9144000000000001
+      }
+    ],
+    "stalls": [
+      {
+        "name": "Stall 1",
+        "left": 6.64464,
+        "right": 9.35736,
+        "front": 0.1524,
+        "rear": 5.638800000000001,
+        "polygon": [],
+        "car_zone": [
+          [
+            7.0104,
+            0.45720000000000005
+          ],
+          [
+            8.9916,
+            0.45720000000000005
+          ],
+          [
+            8.9916,
+            4.724400000000001
+          ],
+          [
+            7.0104,
+            4.724400000000001
+          ]
+        ]
+      },
+      {
+        "name": "Stall 2",
+        "left": 3.6575999999999995,
+        "right": 6.52272,
+        "front": 0.1524,
+        "rear": 6.339840000000001,
+        "polygon": [],
+        "car_zone": [
+          [
+            4.099559999999999,
+            0.45720000000000005
+          ],
+          [
+            6.080759999999999,
+            0.45720000000000005
+          ],
+          [
+            6.080759999999999,
+            6.03504
+          ],
+          [
+            4.099559999999999,
+            6.03504
+          ]
+        ]
+      },
+      {
+        "name": "Stall 3",
+        "left": 0.1524000000000001,
+        "right": 3.383279999999999,
+        "front": 1.0668,
+        "rear": 7.315200000000001,
+        "polygon": [],
+        "car_zone": [
+          [
+            0.7772399999999996,
+            1.3716
+          ],
+          [
+            2.75844,
+            1.3716
+          ],
+          [
+            2.75844,
+            6.4008
+          ],
+          [
+            0.7772399999999996,
+            6.4008
+          ]
+        ]
+      }
+    ],
+    "radar": {
+      "x": 4.937759999999999,
+      "y": 6.431280000000001,
+      "z": 2.7432000000000003,
+      "azimuth_deg": 180.0,
+      "elevation_deg": -20.0,
+      "roll_deg": 0.0,
+      "fov_azimuth_deg": 120.0,
+      "fov_elevation_deg": 80.0,
+      "max_range": 15.0,
+      "flip_azimuth": false
+    },
+    "display_unit": "ft",
+    "outline": [
+      [
+        9.50976,
+        6.477
+      ],
+      [
+        8.238744,
+        6.477
+      ],
+      [
+        8.238744,
+        5.76072
+      ],
+      [
+        7.14756,
+        5.76072
+      ],
+      [
+        7.14756,
+        6.477
+      ],
+      [
+        3.5356799999999993,
+        6.477
+      ],
+      [
+        3.5356799999999993,
+        7.4676
+      ],
+      [
+        0.0,
+        7.4676
+      ],
+      [
+        0.0,
+        0.9144000000000001
+      ],
+      [
+        3.5356799999999993,
+        0.9144000000000001
+      ],
+      [
+        3.5356799999999993,
+        0.0
+      ],
+      [
+        9.50976,
+        0.0
+      ]
+    ],
+    "ignore_zones": [
+      {
+        "name": "Between stalls 3 and 2",
+        "polygon": [
+          [
+            2.91084,
+            0.1524
+          ],
+          [
+            3.9471599999999993,
+            0.1524
+          ],
+          [
+            3.9471599999999993,
+            6.339840000000001
+          ],
+          [
+            2.91084,
+            6.339840000000001
+          ]
+        ]
+      },
+      {
+        "name": "Between stalls 2 and 1",
+        "polygon": [
+          [
+            6.233159999999999,
+            0.1524
+          ],
+          [
+            6.858,
+            0.1524
+          ],
+          [
+            6.858,
+            6.339840000000001
+          ],
+          [
+            6.233159999999999,
+            6.339840000000001
+          ]
+        ]
+      },
+      {
+        "name": "House end of stall 3",
+        "polygon": [
+          [
+            0.1524000000000001,
+            6.5532
+          ],
+          [
+            3.383279999999999,
+            6.5532
+          ],
+          [
+            3.383279999999999,
+            7.315200000000001
+          ],
+          [
+            0.1524000000000001,
+            7.315200000000001
+          ]
+        ]
+      },
+      {
+        "name": "House end of stall 1",
+        "polygon": [
+          [
+            6.64464,
+            4.876800000000001
+          ],
+          [
+            9.35736,
+            4.876800000000001
+          ],
+          [
+            9.35736,
+            5.638800000000001
+          ],
+          [
+            6.64464,
+            5.638800000000001
+          ]
+        ]
+      }
+    ]
+  },
+  "expected_states": [
+    "OCCUPIED",
+    "OCCUPIED",
+    ""
+  ],
+  "notes": "",
+  "file_formats": "see app/recording/session.py",
+  "ended": "2026-10-08T18:50:16",
+  "frames": 350,
+  "raw_bytes": 3625554
+}
