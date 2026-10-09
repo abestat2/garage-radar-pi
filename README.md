@@ -74,8 +74,11 @@ radar's actual draw with a USB meter.
     3.3 V data, but not reliably.
   * Add the usual 300–500 Ω resistor in series with DIN, and a 1000 µF capacitor across the strip
     supply.
+* **RGBW bars:** SK6812 RGBW bars (each LED has a large yellow white-emitter square) need
+  `leds.order = "GRBW"`. With the default `GRB`, only 3/4 of the LEDs light, in scrambled colours.
 * **Configuration:** pins, LED count, which LEDs belong to which stall, colours and brightness are
-  all set on the web page (Settings), then restart the service.
+  all set on the web page (Settings), then restart the service. The Status page shows whether the
+  bar is running.
 
 ## 3. Contract for the ESP32
 

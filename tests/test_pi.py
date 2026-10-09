@@ -132,3 +132,30 @@ def test_calibration_needs_empty_and_occupied_data(data_dir):
         {"recording": "fixture", "t": [72, 96], "states": ["OCCUPIED"] * 3}]}
     with pytest.raises(CalibrationError, match="needs at least one EMPTY and one OCCUPIED"):
         calibrate(labels, data_dir.recordings_dir, default_garage())
+
+
+def test_rgbw_encoding_uses_four_bytes_and_the_white_chip():
+    from garage_pi.leds import BIT0, BIT1, LATCH_BYTES, encode_ws2812
+
+    def byte(bits):
+        return int("".join("1" if b == BIT1 else "0" for b in bits), 2)
+
+    data = encode_ws2812([(0, 160, 160), (255, 255, 255)], "GRBW")
+    assert len(data) == 2 * 32 + LATCH_BYTES  # 4 colour bytes x 8 SPI bytes per LED
+    g, r, b, w = (byte(data[i * 8:(i + 1) * 8]) for i in range(4))
+    assert (g, r, b, w) == (160, 0, 160, 0)  # teal: no common white
+    g, r, b, w = (byte(data[32 + i * 8:32 + (i + 1) * 8]) for i in range(4))
+    assert (g, r, b, w) == (0, 0, 0, 255)  # white goes to the white chip
+    assert set(data[:64]) <= {BIT0, BIT1}
+
+
+def test_led_test_explains_when_the_bar_is_disabled(data_dir):
+    from garage_pi.service import GarageService
+
+    svc = GarageService(data_dir, lambda s, c: None, use_hardware=False)
+    try:
+        svc._cmd_led_test()
+        assert "disabled" in svc.last_report[0]
+        assert svc.snapshot()["leds"]["running"] is False
+    finally:
+        svc.shutdown()

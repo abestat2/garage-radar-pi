@@ -1,4 +1,4 @@
-"""NeoPixel (WS2812/WS2812B) bar driven from the Pi's SPI0 MOSI pin (GPIO10).
+"""NeoPixel (WS2812/WS2812B, or SK6812 RGBW) bar driven from the Pi's SPI0 MOSI pin (GPIO10).
 
 WS2812 LEDs need a single-wire signal with ~0.3/0.8 us pulses; I2C cannot produce it, but SPI can:
 each LED data bit becomes one SPI byte clocked at ~6.4 MHz (160 ns per SPI bit):
@@ -6,6 +6,10 @@ each LED data bit becomes one SPI byte clocked at ~6.4 MHz (160 ns per SPI bit):
     "1" bit -> 0b11111000  (~0.80 us high)
 followed by >= 300 us of zeros to latch.  Needs `dtparam=spi=on`.  Most WS2812B accept 3.3 V
 data, but a 74AHCT125 level shifter to 5 V is recommended; power the strip from 5 V, not the Pi.
+
+`order` is the byte order the LEDs expect: "GRB" for WS2812B, "GRBW" for SK6812 RGBW bars (4 bytes per
+LED - with a 3-byte order such a bar shows only 3/4 of its LEDs, in scrambled colours).  For RGBW the
+white part of each colour (min of R, G, B) is sent to the dedicated white chip.
 """
 from __future__ import annotations
 
@@ -22,13 +26,18 @@ BIT0, BIT1 = 0b11000000, 0b11111000
 LATCH_BYTES = 300  # 300 bytes x 8 bits x 156 ns = 375 us low
 
 
-def encode_ws2812(colors: list[tuple[int, int, int]], order: str = "GRB") -> bytes:
-    """RGB tuples -> SPI byte stream for WS2812."""
-    idx = {"R": 0, "G": 1, "B": 2}
+def encode_ws2812(colors: list[tuple[int, ...]], order: str = "GRB") -> bytes:
+    """RGB (or RGBW) tuples -> SPI byte stream.  With a "W" in `order`, an RGB colour's common white
+    component is moved to the white chip."""
+    idx = {"R": 0, "G": 1, "B": 2, "W": 3}
+    rgbw = "W" in order
     out = bytearray()
     for c in colors:
+        if rgbw and len(c) == 3:
+            w = min(c)
+            c = (c[0] - w, c[1] - w, c[2] - w, w)
         for ch in order:
-            v = int(c[idx[ch]]) & 0xFF
+            v = int(c[idx[ch]] if idx[ch] < len(c) else 0) & 0xFF
             for bit in range(7, -1, -1):
                 out.append(BIT1 if (v >> bit) & 1 else BIT0)
     out.extend(b"\x00" * LATCH_BYTES)
@@ -77,14 +86,24 @@ class LedBar:
         self.enabled = bool(settings.get("enabled", False))
         self.count = int(settings.get("count", 8))
         self.strip = None
+        self.problem = "no LED hardware (mock output)"
         if self.enabled and use_hardware:
             try:
                 self.strip = _SpiStrip(int(settings.get("spi_bus", 0)), int(settings.get("spi_device", 0)),
                                        settings.get("order", "GRB"))
             except Exception as e:
                 log.warning("SPI LED strip unavailable (%s) - LED output disabled", e)
+                self.problem = f"SPI unavailable: {e}"
         if self.strip is None:
             self.strip = _MockStrip(self.count)
+        self.hardware = isinstance(self.strip, _SpiStrip)
+        if not self.enabled:
+            self.problem = "LED bar is disabled (Settings -> leds -> enabled, then restart the service)"
+            log.info("LED bar disabled in the settings")
+        elif self.hardware:
+            self.problem = ""
+            log.info("LED bar on SPI%s.%s: %d LEDs, order %s", settings.get("spi_bus", 0),
+                     settings.get("spi_device", 0), self.count, settings.get("order", "GRB"))
         self.states = [StallState.UNKNOWN] * n_stalls
         self.flash: list[tuple[str, float]] = [("", 0.0)] * n_stalls
         self.system = "starting"  # "ok", "error", "busy", "starting"

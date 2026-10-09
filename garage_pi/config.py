@@ -45,7 +45,7 @@ DEFAULTS: dict = {
         "stall_leds": [[5, 6, 7], [3, 4], [0, 1, 2]],  # LED indexes per stall (stall 1, 2, 3)
         "status_led": None,  # optional LED index showing system health
         "brightness": 0.25,
-        "order": "GRB",
+        "order": "GRB",  # "GRBW" for SK6812 RGBW bars (4 bytes per LED)
         "colors": {
             "OCCUPIED": [255, 0, 0],
             "VEHICLE ENTERING": [0, 255, 0],

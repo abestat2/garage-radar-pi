@@ -84,6 +84,7 @@ textarea { width: 100%; min-height: 120px; font-family: var(--mono); font-size: 
         <button class="act secondary" data-cmd="led_test">Test LED bar</button>
         <button class="act secondary" data-cmd="revert_reference">Revert to captured reference</button>
       </div>
+      <div id="sysmsg" class="muted"></div>
     </section>
   </div>
 
@@ -215,6 +216,7 @@ function renderStatus(s) {
     ["System OK pin", `GPIO${s.system_ok_pin.gpio}: ${s.system_ok_pin.ok ? "HIGH (ok)" : "LOW"}`],
     ["MQTT", s.mqtt.enabled ? (s.mqtt.connected ? "connected" : "not connected " + (s.mqtt.error || "")) : "off"],
     ["Raw stream", s.raw_stream.port ? `TCP ${s.raw_stream.port}, ${s.raw_stream.clients} client(s)` : "off"],
+    ["LED bar", s.leds.running ? `running: ${s.leds.count} LEDs, order ${s.leds.order}` : (s.leds.problem || "off")],
     ["Zones", `${s.garage.zones.length} clutter zone(s): ${s.garage.zones.join(", ") || "none"}`],
     ["Uptime", `${Math.round(s.uptime_s / 60)} min`],
   ];
@@ -231,6 +233,7 @@ function renderStatus(s) {
   if (rec) $("#recnow").textContent = `Recording ${rec.name}: ${rec.remaining_s} s left (states ${rec.states.join(", ")})`;
   document.querySelectorAll("[data-page=calibrate] button.act").forEach(b => { b.disabled = !!rec || !!s.calibration.busy; });
   $("#report").textContent = (s.calibration.busy ? s.calibration.busy + "…\n" : "") + (s.calibration.report || []).join("\n");
+  $("#sysmsg").textContent = (s.calibration.report || []).filter(l => l.startsWith("LED")).join(" ");
   const L = s.calibration.labels;
   $("#labels").innerHTML = L.segments.map(g => `<tr><td class="mono">${esc(g.recording)}</td><td>${esc(g.states.join(", "))}</td>
       <td>${L.reference.includes(g.recording) ? "reference + thresholds" : "thresholds"}</td>

@@ -361,7 +361,11 @@ class GarageService:
         self._save_labels(labels)
 
     def _cmd_led_test(self) -> None:
+        if self.leds.problem:
+            self.last_report = ["LED test not possible: " + self.leds.problem]
+            return
         self.leds.test(6.0)
+        self.last_report = ["LED test: red/green/blue/white chase for 6 s"]
 
     def _labels(self) -> dict:
         p = self.cfg.file(LABELS)
@@ -412,6 +416,8 @@ class GarageService:
                                                         "states": self.rec_job["states"], "reference": self.rec_job["reference"]},
             "mqtt": {"enabled": self.mqtt.enabled, "connected": self.mqtt.connected, "error": self.mqtt.last_error},
             "raw_stream": {"port": self.raw.port if self.raw else None, "clients": self.raw.clients if self.raw else 0},
+            "leds": {"enabled": self.leds.enabled, "running": self.leds.enabled and self.leds.hardware,
+                     "count": self.leds.count, "order": self.cfg["leds"].get("order", "GRB"), "problem": self.leds.problem},
             "garage": {"stalls": [s.name for s in self.garage.stalls], "zones": [z.name for z in self.garage.ignore_zones]},
         }
 
