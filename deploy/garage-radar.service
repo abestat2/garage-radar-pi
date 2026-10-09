@@ -1,0 +1,18 @@
+[Unit]
+Description=Garage radar car detection (IWR6843LEVM)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@APP_DIR@
+ExecStart=@APP_DIR@/.venv/bin/python -m garage_pi --data-dir @DATA_DIR@
+Restart=always
+RestartSec=5
+# give the radar time to stop and the reference time to be saved
+TimeoutStopSec=20
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

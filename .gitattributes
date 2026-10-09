@@ -1,0 +1,5 @@
+# keep Linux scripts runnable when the repo is checked out on Windows
+*.sh      text eol=lf
+*.service text eol=lf
+*.bin     binary
+*.npz     binary

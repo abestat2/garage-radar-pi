@@ -1,0 +1,4 @@
+# Installed by deploy/install.sh into a venv that also sees the system packages
+# (numpy, gpiozero, lgpio and spidev come from apt on Raspberry Pi OS - much faster than pip on a Zero 2 W).
+pyserial>=3.5
+paho-mqtt>=1.6
