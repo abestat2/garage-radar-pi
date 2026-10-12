@@ -62,6 +62,7 @@ radar's actual draw with a USB meter.
 | Stall 2 (centre) | 27 | 13 | ESP32 input |
 | Stall 3 (single door) | 22 | 15 | ESP32 input |
 | System OK | 23 | 16 | ESP32 input |
+| Indicator reports (RXD) | 15 | 10 | ESP32 detector TX (GPIO21) |
 | NeoPixel data (SPI0 MOSI) | 10 | 19 | 74AHCT125 → LED DIN |
 | Ground | — | 6, 9, 14, 20, 25 | ESP32 GND, LED GND, 5 V supply GND |
 
@@ -127,6 +128,8 @@ device appears with:
 | `sensor.stall_N_state` | EMPTY / OCCUPIED / VEHICLE ENTERING / VEHICLE EXITING / UNKNOWN / SENSOR/CONFIGURATION ERROR, with confidence and readings as attributes |
 | `event.stall_N` | event types `ENTERED` / `EXITED`, for automations |
 | `sensor.radar_status` | ok / starting / radar offline (diagnostic) |
+| `sensor.stall_N_indicator_battery` | indicator battery %, estimated from its voltage (`sensor.stall_N_indicator_voltage`, diagnostic) |
+| `binary_sensor.stall_N_indicator_connected` | the detector is in contact with the stall's indicator (diagnostic) |
 
 Example automation trigger: *Event* → entity `event.stall_2` → event type `ENTERED`.
 

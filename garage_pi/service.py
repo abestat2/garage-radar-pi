@@ -29,6 +29,7 @@ from app.recording.replay import load_recording
 
 from .config import ServiceConfig
 from .gpio_out import StallOutputs
+from .indicators import IndicatorLink, IndicatorStatus
 from .leds import LedBar
 from .mqtt_ha import MqttPublisher
 from .raw_stream import RawStreamServer
@@ -72,7 +73,12 @@ class GarageService:
         n = len(self.garage.stalls)
         self.gpio = StallOutputs(cfg["gpio"], use_hardware)
         self.leds = LedBar(cfg["leds"], n, use_hardware)
-        self.mqtt = MqttPublisher(cfg["mqtt"], n, VERSION)
+        ind = cfg["indicators"]
+        self.indicators = IndicatorStatus(n)
+        # The reader thread only on real hardware; tests feed lines with self.indicator_link.feed()
+        self.indicator_link = IndicatorLink(ind, self.indicators) if ind.get("enabled") and use_hardware else None
+        self._indicators_published: list = [None] * n
+        self.mqtt = MqttPublisher(cfg["mqtt"], n, VERSION, indicators=bool(ind.get("enabled")))
         self.raw = RawStreamServer(int(cfg["raw_stream"]["port"])) if cfg["raw_stream"]["enabled"] else None
         self._published: list = [None] * n
         self._last_status_pub = 0.0
@@ -251,6 +257,7 @@ class GarageService:
         if now - self._last_live_save > float(self.cfg["reference"]["save_interval_s"]):
             self.save_live_reference()
             self._last_live_save = now
+        self._publish_indicators()
         if now - self._last_status_pub > 30:
             self.mqtt.publish_status(self.status_summary())
             self._last_status_pub = now
@@ -375,6 +382,14 @@ class GarageService:
         self.cfg.file(LABELS).write_text(json.dumps(labels, indent=2))
 
     # ================================================================ status
+    def _publish_indicators(self, force: bool = False) -> None:
+        """Publish each stall's indicator when its contact or battery changes."""
+        for i, info in enumerate(self.indicators.snapshot()):
+            key = (info["contact"], info["battery_v"])
+            if force or key != self._indicators_published[i]:
+                self.mqtt.publish_indicator(i, info)
+                self._indicators_published[i] = key
+
     def status_summary(self) -> dict:
         occ = self.pipeline.occupancy
         fps = (len(self.frame_times) - 1) / max(self.frame_times[-1] - self.frame_times[0], 1e-6) \
@@ -403,6 +418,9 @@ class GarageService:
                      "error": self.link_error, "bytes": getattr(self.link, "bytes_received", 0)},
             "stalls": stalls,
             "system_ok_pin": {"gpio": self.gpio.ok_pin_number, "ok": self.gpio.ok},
+            "indicators": {"port": self.indicator_link.port if self.indicator_link else None,
+                           "error": self.indicator_link.error if self.indicator_link else "",
+                           "stalls": self.indicators.snapshot()},
             "events": self.events[:30],
             "reference": {"source": self.reference_source,
                           "frames": occ.reference.frames if occ and occ.reference else 0,
@@ -429,7 +447,8 @@ class GarageService:
             self.save_live_reference()
         except Exception as e:
             log.warning("saving on shutdown failed: %s", e)
-        for closer in (lambda: self.link and self.link.close(), self.gpio.close, self.leds.close, self.mqtt.close,
+        for closer in (lambda: self.link and self.link.close(), lambda: self.indicator_link and self.indicator_link.close(),
+                       self.gpio.close, self.leds.close, self.mqtt.close,
                        lambda: self.raw and self.raw.close()):
             try:
                 closer()
