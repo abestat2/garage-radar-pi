@@ -4,7 +4,11 @@ Entities created (per stall N, user numbering):
     binary_sensor  <name> Stall N occupied     ON/OFF (device_class occupancy)
     sensor         <name> Stall N state        EMPTY / OCCUPIED / VEHICLE ENTERING / ... (+ attributes)
     event          <name> Stall N              event_types ENTERED / EXITED
-and one radar status sensor.  Availability uses a retained LWT on <base>/<id>/availability.
+and one radar status sensor. With indicators, per stall also:
+    sensor         <name> Stall N indicator battery    % (device_class battery)
+    sensor         <name> Stall N indicator voltage    V (diagnostic)
+    binary_sensor  <name> Stall N indicator connected  (device_class connectivity)
+Availability uses a retained LWT on <base>/<id>/availability.
 
 Topics (retained unless noted):
     <base>/<id>/availability           online | offline
@@ -12,6 +16,7 @@ Topics (retained unless noted):
     <base>/<id>/stallN/state           state text
     <base>/<id>/stallN/attributes      JSON (confidence, changed, threshold, ...)
     <base>/<id>/stallN/event           JSON {"event_type": "ENTERED"|"EXITED", ...}   (not retained)
+    <base>/<id>/stallN/indicator       JSON {"battery_pct", "battery_v", "connected": "ON"|"OFF", ...}
     <base>/<id>/status                 JSON radar/service status
 """
 from __future__ import annotations
@@ -24,9 +29,10 @@ log = logging.getLogger("garage_pi.mqtt")
 
 
 class MqttPublisher:
-    def __init__(self, settings: dict, n_stalls: int, version: str = "", client=None):
+    def __init__(self, settings: dict, n_stalls: int, version: str = "", client=None, indicators: bool = False):
         self.s = settings
         self.n = n_stalls
+        self.indicators = indicators
         self.version = version
         self.enabled = bool(settings.get("enabled")) and (bool(settings.get("host")) or client is not None)
         self.base = f"{settings.get('base_topic', 'garage_radar')}/{settings.get('device_id', 'garage_radar')}"
@@ -109,6 +115,22 @@ class MqttPublisher:
             out.append((f"{pre}/event/{did}/stall{i}_event/config", {
                 "name": f"Stall {i}", "unique_id": f"{did}_stall{i}_event", "icon": "mdi:garage-variant",
                 "state_topic": f"{st}/event", "event_types": ["ENTERED", "EXITED"], "device": device, **avail}))
+            if self.indicators:
+                out.append((f"{pre}/sensor/{did}/stall{i}_indicator_battery/config", {
+                    "name": f"Stall {i} indicator battery", "unique_id": f"{did}_stall{i}_indicator_battery",
+                    "device_class": "battery", "unit_of_measurement": "%", "state_class": "measurement",
+                    "state_topic": f"{st}/indicator", "value_template": "{{ value_json.battery_pct }}",
+                    "json_attributes_topic": f"{st}/indicator", "device": device, **avail}))
+                out.append((f"{pre}/sensor/{did}/stall{i}_indicator_voltage/config", {
+                    "name": f"Stall {i} indicator voltage", "unique_id": f"{did}_stall{i}_indicator_voltage",
+                    "device_class": "voltage", "unit_of_measurement": "V", "state_class": "measurement",
+                    "entity_category": "diagnostic", "state_topic": f"{st}/indicator",
+                    "value_template": "{{ value_json.battery_v }}", "device": device, **avail}))
+                out.append((f"{pre}/binary_sensor/{did}/stall{i}_indicator_connected/config", {
+                    "name": f"Stall {i} indicator connected", "unique_id": f"{did}_stall{i}_indicator_connected",
+                    "device_class": "connectivity", "entity_category": "diagnostic",
+                    "state_topic": f"{st}/indicator", "value_template": "{{ value_json.connected }}",
+                    "payload_on": "ON", "payload_off": "OFF", "device": device, **avail}))
         out.append((f"{pre}/sensor/{did}/radar_status/config", {
             "name": "Radar status", "unique_id": f"{did}_radar_status", "icon": "mdi:radar",
             "state_topic": f"{self.base}/status", "value_template": "{{ value_json.health }}",
@@ -131,6 +153,13 @@ class MqttPublisher:
             "changed_pct": None if result.changed is None else round(result.changed * 100, 1),
             "threshold_pct": None if result.threshold is None else round(result.threshold * 100, 1),
             "persistence_s": round(result.persistence, 1), "explanation": result.explanation[:4]})
+
+    def publish_indicator(self, i: int, info: dict) -> None:
+        """One stall's indicator: battery and whether the detector is in contact with it."""
+        self._pub(f"stall{i + 1}/indicator", {
+            "battery_pct": info["battery_pct"], "battery_v": info["battery_v"],
+            "connected": "ON" if info["contact"] == "ok" else "OFF", "contact": info["contact"],
+            "last_exchange_age_s": info["last_exchange_age_s"]})
 
     def publish_event(self, e) -> None:
         self._pub(f"stall{e.stall_index + 1}/event",

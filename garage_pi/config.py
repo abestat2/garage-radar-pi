@@ -36,6 +36,16 @@ DEFAULTS: dict = {
         "ok_pin": 23,  # HIGH = radar running and occupancy ready (stall pins are trustworthy)
         "active_high": True,
         "entering_is_present": False,  # True: raise the pin already on VEHICLE ENTERING (earlier, less certain)
+        # Web page "Simulate car arriving": pin LOW this long (longer than the indicator's request
+        # interval, so it sees the stall empty), then HIGH this long
+        "simulate_empty_s": 5.0,
+        "simulate_car_s": 60.0,
+    },
+    "indicators": {
+        # Battery and contact of the ESP-NOW stall indicators, reported by the detector ESP32 on a UART
+        "enabled": True,
+        "port": "/dev/serial0",  # Pi RXD = GPIO15, header pin 10 (enable the UART, no serial console)
+        "baud": 115200,
     },
     "leds": {
         "enabled": False,
