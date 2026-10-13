@@ -258,6 +258,7 @@ class GarageService:
             self.save_live_reference()
             self._last_live_save = now
         self._publish_indicators()
+        self.gpio.refresh(now)  # a simulation's steps happen on time even between radar frames
         if now - self._last_status_pub > 30:
             self.mqtt.publish_status(self.status_summary())
             self._last_status_pub = now
@@ -274,6 +275,18 @@ class GarageService:
             except Exception as e:
                 log.exception("command %s failed", cmd[0])
                 self.last_report = [f"ERROR: {cmd[0]}: {e}"]
+
+    def _cmd_simulate_arrival(self, stall: int) -> None:
+        """Fake a car arriving in a stall on its ESP pin only, so its indicator lights its bar."""
+        g = self.cfg["gpio"]
+        self.gpio.simulate_arrival(stall - 1, float(g.get("simulate_empty_s", 5.0)), float(g.get("simulate_car_s", 60.0)))
+        log.info("simulating a car arriving in stall %d on its ESP pin", stall)
+        self.last_report = [f"Simulating a car arriving in stall {stall}"]
+
+    def _cmd_stop_simulation(self) -> None:
+        self.gpio.stop_simulations()
+        log.info("simulation stopped")
+        self.last_report = ["Simulation stopped"]
 
     def _cmd_reconnect(self) -> None:
         self._drop_link(self.link_error or "reconnect requested")

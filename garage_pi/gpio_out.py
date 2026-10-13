@@ -7,10 +7,15 @@ Contract (see deploy/README_PI.md):
     OK pin HIGH     = radar running and parked-car detection ready -> stall pins are trustworthy
 A rising edge on a stall pin is therefore a confirmed car entry, a falling edge a confirmed exit.
 (`active_high: false` inverts every pin.)
+
+Test: simulate_arrival() drives one stall pin LOW (empty) and then HIGH (car) with the OK pin HIGH, so the
+stall's indicator guides a car in without one. Only the pins are faked: levels, edges and events stay real,
+and the pin returns to its real level when the simulation ends.
 """
 from __future__ import annotations
 
 import logging
+import time
 
 from app.models.garage_state import StallState
 
@@ -74,34 +79,79 @@ class StallOutputs:
         self.pins = [_make_pin(p, hw) for p in self.pin_numbers]
         ok = settings.get("ok_pin")
         self.ok_pin = _make_pin(ok, hw) if ok is not None else None
-        self.levels: list[bool | None] = [None] * len(self.pins)
-        self.ok = False
+        self.levels: list[bool | None] = [None] * len(self.pins)  # real (radar) levels
+        self.ok = False  # real system OK
+        # What is on the pins, which differs from the real levels while simulating
+        self._written: list[bool] = [False] * len(self.pins)
+        self._ok_written = False
+        # stall index -> (time the simulated car arrives, time the simulation ends)
+        self.simulations: dict[int, tuple[float, float]] = {}
         for p in self.pins + ([self.ok_pin] if self.ok_pin else []):
             self._write(p, False)
 
     def _write(self, pin, logical: bool) -> None:
         (pin.on if logical == self.active_high else pin.off)()
 
-    def update(self, stall_states: list[StallState], system_ok: bool) -> list[tuple[int, bool]]:
+    def update(self, stall_states: list[StallState], system_ok: bool, now: float | None = None) -> list[tuple[int, bool]]:
         """Apply new states; returns [(stall index, new level)] for edges that occurred."""
         edges = []
-        for i, (pin, st) in enumerate(zip(self.pins, stall_states)):
+        for i, st in enumerate(stall_states[:len(self.pins)]):
             lvl = desired_level(st, self.levels[i], self.entering_is_present)
             if lvl is not None and lvl != self.levels[i]:
-                self._write(pin, lvl)
                 if self.levels[i] is not None:
                     edges.append((i, lvl))
                 self.levels[i] = lvl
-        if self.ok_pin is not None and system_ok != self.ok:
-            self._write(self.ok_pin, system_ok)
         self.ok = system_ok
+        self.refresh(now)
         return edges
+
+    def refresh(self, now: float | None = None) -> None:
+        """Write the pins: the real levels, or a simulation's while one runs. Call regularly so a
+        simulation's steps happen on time even without new radar states."""
+        now = time.time() if now is None else now
+        self.simulations = {i: span for i, span in self.simulations.items() if now < span[1]}
+        for i, pin in enumerate(self.pins):
+            if i in self.simulations:
+                level = now >= self.simulations[i][0]
+            elif self.levels[i] is not None:
+                level = self.levels[i]
+            else:
+                continue  # nothing known yet: stays low
+            if level != self._written[i]:
+                self._write(pin, level)
+                self._written[i] = level
+        ok = self.ok or bool(self.simulations)
+        if self.ok_pin is not None and ok != self._ok_written:
+            self._write(self.ok_pin, ok)
+            self._ok_written = ok
+
+    def simulate_arrival(self, i: int, empty_s: float, present_s: float, now: float | None = None) -> None:
+        """Fake a car arriving in stall i on its pin: empty for empty_s (so the indicator sees the
+        stall empty first), then a car for present_s, then back to the real level."""
+        if not 0 <= i < len(self.pins):
+            raise ValueError(f"no stall {i + 1}")
+        now = time.time() if now is None else now
+        self.simulations[i] = (now + empty_s, now + empty_s + present_s)
+        self.refresh(now)
+
+    def stop_simulations(self, now: float | None = None) -> None:
+        self.simulations.clear()
+        self.refresh(now)
+
+    def simulation(self, i: int, now: float | None = None) -> dict | None:
+        """The running simulation of stall i: its phase and seconds left, or None."""
+        now = time.time() if now is None else now
+        span = self.simulations.get(i)
+        if span is None or now >= span[1]:
+            return None
+        arriving = now < span[0]
+        return {"phase": "empty" if arriving else "car", "remaining_s": round((span[0] if arriving else span[1]) - now)}
 
     def describe(self) -> list[dict]:
         nums = self.pin_numbers
         return [{"stall": i + 1, "gpio": nums[i] if i < len(nums) else None,
                  "level": None if lvl is None else ("HIGH" if lvl == self.active_high else "LOW"),
-                 "car_present": lvl} for i, lvl in enumerate(self.levels)]
+                 "car_present": lvl, "simulation": self.simulation(i)} for i, lvl in enumerate(self.levels)]
 
     def close(self) -> None:
         for p in self.pins + ([self.ok_pin] if self.ok_pin else []):

@@ -5,7 +5,8 @@
     GET  /api/config                settings (passwords masked)
     POST /api/config                {"section": {...}}  -> saved; service restarts its outputs
     POST /api/command               {"cmd": "record"|"stop_record"|"fit"|"revert_reference"|"reconnect"|
-                                             "reload"|"led_test"|"remove_label", ...}
+                                             "reload"|"led_test"|"remove_label"|
+                                             "simulate_arrival" (+ "stall": N)|"stop_simulation", ...}
     GET  /api/recordings            list
     GET  /api/recordings/<name>.zip download one recording (open it in the laptop app)
     POST /api/recordings/<name>/delete
@@ -141,7 +142,10 @@ def make_handler(service):
                         service.commands.put(("record", name, states, float(c.get("seconds", 40)), bool(c.get("reference"))))
                     elif cmd == "remove_label":
                         service.commands.put(("remove_label", str(c.get("name"))))
-                    elif cmd in ("stop_record", "fit", "revert_reference", "reconnect", "reload", "led_test"):
+                    elif cmd == "simulate_arrival":
+                        service.commands.put(("simulate_arrival", int(c.get("stall", 0))))
+                    elif cmd in ("stop_record", "fit", "revert_reference", "reconnect", "reload", "led_test",
+                                 "stop_simulation"):
                         service.commands.put((cmd,))
                     else:
                         return self._json({"error": f"unknown command {cmd!r}"}, 400)

@@ -199,6 +199,14 @@ function indicatorRows(ind) {
         <b>Battery</b><span>${esc(battery)}</span>`;
 }
 
+// A simulated arrival on the stall's ESP pin (the radar state above stays real)
+function simulationRow(sim) {
+  if (!sim) return "";
+  const text = sim.phase === "empty" ? `stall empty, car arrives in ${sim.remaining_s} s`
+    : `car in the stall for ${sim.remaining_s} s more`;
+  return `<b>Simulating</b><span style="color:var(--enter)">${esc(text)}</span>`;
+}
+
 function renderStatus(s) {
   const st = s.status;
   const h = $("#health"); h.textContent = st.health;
@@ -214,6 +222,13 @@ function renderStatus(s) {
         <b>Held</b><span>${x.persistence} s</span>
         <b>ESP pin</b><span>${x.gpio ? "GPIO" + x.gpio.gpio + " " + (x.gpio.level || "-") : "-"}</span>
         ${indicatorRows(s.indicators && s.indicators.stalls[i])}
+        ${simulationRow(x.gpio && x.gpio.simulation)}
+      </div>
+      <div class="row">
+        ${x.gpio && x.gpio.simulation
+          ? '<button class="act secondary" data-cmd="stop_simulation">Stop simulation</button>'
+          : `<button class="act secondary" onclick="cmd({cmd: 'simulate_arrival', stall: ${i + 1}})"
+               title="Drive this stall's ESP pin through a car arriving, so its indicator lights its bar">Simulate car arriving</button>`}
       </div>
     </div>`).join("") : '<p class="muted">Waiting for radar data…</p>';
   $("#events").innerHTML = s.events.map(e => `<tr><td>${esc(e.time)}</td><td>${e.stall}</td><td>${esc(e.event)}</td><td>${esc(e.detail)}</td></tr>`).join("")
