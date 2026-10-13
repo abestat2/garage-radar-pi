@@ -188,12 +188,23 @@ function recordLabelled() {
   record(name, stallStates, false);
 }
 
+// The stall's battery-powered indicator, as reported by the detector ESP32 over the UART
+function indicatorRows(ind) {
+  if (!ind) return "";
+  const battery = ind.battery_v == null ? "not reported yet" : `${ind.battery_pct}% (${ind.battery_v.toFixed(2)} V)`;
+  const age = ind.last_exchange_age_s == null ? "" : `, last contact ${ind.last_exchange_age_s} s ago`;
+  const contact = {ok: "connected", lost: "lost", unknown: "no report yet"}[ind.contact] || ind.contact;
+  const color = ind.contact === "ok" ? "" : ' style="color:var(--err)"';
+  return `<b>Indicator</b><span${color}>${esc(contact + age)}</span>
+        <b>Battery</b><span>${esc(battery)}</span>`;
+}
+
 function renderStatus(s) {
   const st = s.status;
   const h = $("#health"); h.textContent = st.health;
   h.style.background = st.health === "ok" ? "var(--ok)" : st.health === "starting" ? "var(--enter)" : "var(--err)";
   $("#fps").textContent = `${st.frame_rate.toFixed(1)} frames/s`;
-  $("#stalls").innerHTML = s.stalls.length ? s.stalls.map(x => `
+  $("#stalls").innerHTML = s.stalls.length ? s.stalls.map((x, i) => `
     <div class="stall">
       <div><b>${esc(x.name)}</b></div>
       <div class="state" style="background:${COLORS[x.state] || "var(--unk)"}">${esc(x.state)}</div>
@@ -202,6 +213,7 @@ function renderStatus(s) {
         <b>Changed</b><span>${x.changed == null ? "-" : x.changed + "% (threshold " + x.threshold + "%)"}</span>
         <b>Held</b><span>${x.persistence} s</span>
         <b>ESP pin</b><span>${x.gpio ? "GPIO" + x.gpio.gpio + " " + (x.gpio.level || "-") : "-"}</span>
+        ${indicatorRows(s.indicators && s.indicators.stalls[i])}
       </div>
     </div>`).join("") : '<p class="muted">Waiting for radar data…</p>';
   $("#events").innerHTML = s.events.map(e => `<tr><td>${esc(e.time)}</td><td>${e.stall}</td><td>${esc(e.event)}</td><td>${esc(e.detail)}</td></tr>`).join("")
@@ -214,6 +226,8 @@ function renderStatus(s) {
     ["Reference", `${r.source}, ${r.frames} heatmaps, adapted ${Math.round(r.adapted_s / 60)} min`],
     ["Calibration", s.calibration.notes + (s.calibration.fingerprint_ok ? "" : " (does not match the radar config!)")],
     ["System OK pin", `GPIO${s.system_ok_pin.gpio}: ${s.system_ok_pin.ok ? "HIGH (ok)" : "LOW"}`],
+    ["Indicator reports", !s.indicators || !s.indicators.port ? "off"
+      : s.indicators.error ? `${s.indicators.port}: ${s.indicators.error}` : `reading ${s.indicators.port}`],
     ["MQTT", s.mqtt.enabled ? (s.mqtt.connected ? "connected" : "not connected " + (s.mqtt.error || "")) : "off"],
     ["Raw stream", s.raw_stream.port ? `TCP ${s.raw_stream.port}, ${s.raw_stream.clients} client(s)` : "off"],
     ["LED bar", s.leds.running ? `running: ${s.leds.count} LEDs, order ${s.leds.order}` : (s.leds.problem || "off")],
