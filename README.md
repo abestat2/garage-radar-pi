@@ -163,6 +163,19 @@ empty stall's reading creeps toward its threshold).
   them in the app (Record / replay → Open recording).
 * **Geometry and zones:** edit them in the laptop app (Garage Geometry Mode → Save as…), then
   upload on Files → Garage geometry.
+* **3D point cloud:** `scripts/pointcloud_3d.py` reads the raw stream (TCP 7777) and builds an
+  aggregated 3D point cloud, shown live in a matplotlib window.
+  ```
+  pip install numpy matplotlib
+  python scripts/pointcloud_3d.py <pi-ip> --voxel 0.05 --min-snr 8 --save garage.ply
+  ```
+  * Points are merged into a voxel grid (`--voxel`, default 5 cm). Each voxel keeps the centroid of
+    its points and a hit count, so a static scene sharpens over time. Colour shows the hit count.
+  * Axes are the radar frame, in metres: x right, y boresight, z up.
+  * `--min-snr` drops weak points, `--min-hits` hides voxels hit fewer than N times, `--port`
+    changes the port, and `--no-plot` runs headless.
+  * Ctrl+C or closing the window stops it and writes `--save` (`.ply`, `.csv` or `.npy`).
+  * Stationary objects only appear if the radar profile does not remove static clutter.
 
 ## 7. Not yet verified
 
