@@ -35,7 +35,18 @@ from app.radar.config_parser import RadarConfig
 
 log = logging.getLogger("garage_pi.web")
 STATIC = Path(__file__).resolve().parent / "static"
-NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+# a recording folder name: no leading dot, so "." and ".." can never match
+NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
+
+
+def recording_dir(recordings_dir: Path, name: str) -> Path | None:
+    """The recording folder called `name`, or None unless it is a real folder directly inside recordings_dir."""
+    if not NAME_RE.match(name):
+        return None
+    path = recordings_dir / name
+    if not path.is_dir() or path.resolve().parent != recordings_dir.resolve():
+        return None  # missing, or a symlink pointing outside the recordings folder
+    return path
 
 
 def make_handler(service):
@@ -114,10 +125,11 @@ def make_handler(service):
                                     "size_mb": round(size / 1e6, 2), "created": m.get("created")})
                     return self._json(out)
                 m = re.match(r"^/api/recordings/([^/]+)\.zip$", p)
-                if m and NAME_RE.match(m.group(1)) and (cfg.recordings_dir / m.group(1)).is_dir():
+                rec = recording_dir(cfg.recordings_dir, m.group(1)) if m else None
+                if rec is not None:
                     buf = io.BytesIO()
                     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-                        for f in (cfg.recordings_dir / m.group(1)).iterdir():
+                        for f in rec.iterdir():
                             z.write(f, f"{m.group(1)}/{f.name}")
                     return self._send(200, buf.getvalue(), "application/zip",
                                       {"Content-Disposition": f'attachment; filename="{m.group(1)}.zip"'})
@@ -169,9 +181,10 @@ def make_handler(service):
                     service.commands.put(("reload",))
                     return self._json({"ok": True, "stalls": len(g.stalls), "zones": len(g.ignore_zones)})
                 m = re.match(r"^/api/recordings/([^/]+)/delete$", p)
-                if m and NAME_RE.match(m.group(1)) and (cfg.recordings_dir / m.group(1)).is_dir():
+                rec = recording_dir(cfg.recordings_dir, m.group(1)) if m else None
+                if rec is not None:
                     service.commands.put(("remove_label", m.group(1)))
-                    shutil.rmtree(cfg.recordings_dir / m.group(1))
+                    shutil.rmtree(rec)
                     return self._json({"ok": True})
                 self._json({"error": "not found"}, 404)
             except Exception as e:
