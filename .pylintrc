@@ -2,8 +2,8 @@
 py-version = 3.11
 
 [TYPECHECK]
-# Raspberry Pi-only hardware libraries, not installable on CI
-ignored-modules = gpiozero, spidev
+# Pi-only hardware libraries and optional plotting, not installed on CI
+ignored-modules = gpiozero, spidev, matplotlib
 
 [FORMAT]
 max-line-length = 140
