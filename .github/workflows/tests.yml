@@ -1,0 +1,41 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: write  # only used to commit badges/coverage.svg on main
+
+jobs:
+  test:
+    # DAVIN-PC-GARAGE-PI is the only registered runner (labels: self-hosted, Windows, X64)
+    runs-on: [self-hosted, Windows, X64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m venv .ci-venv
+          .ci-venv\Scripts\python -m pip install -q -r requirements-dev.txt
+
+      - name: Run tests with coverage
+        shell: pwsh
+        run: .ci-venv\Scripts\python -m pytest -q --cov-fail-under=90
+
+      - name: Build coverage badge
+        shell: pwsh
+        run: .ci-venv\Scripts\python scripts/coverage_badge.py coverage.xml badges/coverage.svg
+
+      - name: Commit badge (main only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add badges/coverage.svg
+          if (git diff --cached --quiet) { exit 0 }
+          git commit -m "Update coverage badge [skip ci]"
+          git push
