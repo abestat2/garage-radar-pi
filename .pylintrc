@@ -1,0 +1,30 @@
+[MAIN]
+py-version = 3.11
+
+[TYPECHECK]
+# Pi-only hardware libraries and optional plotting, not installed on CI
+ignored-modules = gpiozero, spidev, matplotlib
+
+[FORMAT]
+max-line-length = 140
+
+[MESSAGES CONTROL]
+# The code base is deliberately compact; keep the check for real problems
+# (errors, bugs, unused code) and skip style/complexity/docstring rules.
+disable =
+    C,
+    R,
+    fixme,
+    broad-exception-caught,
+    unspecified-encoding,
+    global-statement,
+    protected-access,
+    unused-argument,
+    unused-variable,
+    redefined-outer-name,
+    arguments-differ,
+    subprocess-run-check,
+    unnecessary-lambda,
+    unsubscriptable-object,
+    invalid-field-call,
+    no-member
