@@ -32,7 +32,7 @@ import numpy as np
 
 from app.models.radar_frame import RadarFrame
 from app.models.radar_object import RadarTrack
-from app.models.radar_point import POINT_DTYPE, empty_points
+from app.models.radar_point import POINT_DTYPE, empty_points  # pylint: disable=unused-import
 
 MAGIC = b"\x02\x01\x04\x03\x06\x05\x08\x07"
 HEADER_FMT = "<8s8I"
