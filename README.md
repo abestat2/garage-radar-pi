@@ -1,6 +1,6 @@
 # Garage Radar (Raspberry Pi)
 
-![coverage](badges/coverage.svg)
+![coverage](badges/coverage.svg) [![tests](https://github.com/abestat2/garage-radar-pi/actions/workflows/tests.yml/badge.svg)](https://github.com/abestat2/garage-radar-pi/actions/workflows/tests.yml) [![Pylint](https://github.com/abestat2/garage-radar-pi/actions/workflows/pylint.yml/badge.svg)](https://github.com/abestat2/garage-radar-pi/actions/workflows/pylint.yml)
 
 Car-entry and parked-car detection for a three-stall garage, running headless on a
 **Raspberry Pi Zero 2 W** with a **TI IWR6843LEVM** mmWave radar. Each stall gets a digital output
