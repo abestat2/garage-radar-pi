@@ -7,3 +7,7 @@ __pycache__/
 /recordings/
 .venv/
 
+.ci-venv/
+.coverage
+coverage.xml
+htmlcov/

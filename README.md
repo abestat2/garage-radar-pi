@@ -1,5 +1,7 @@
 # Garage Radar (Raspberry Pi)
 
+![coverage](badges/coverage.svg)
+
 Car-entry and parked-car detection for a three-stall garage, running headless on a
 **Raspberry Pi Zero 2 W** with a **TI IWR6843LEVM** mmWave radar. Each stall gets a digital output
 for an ESP32 (HIGH = car in the stall), plus a NeoPixel status bar, MQTT / Home Assistant entities,
@@ -18,7 +20,12 @@ deploy/           install script and systemd unit
 tests/            service tests, incl. a full replay of a real garage recording (tests/data)
 ```
 
-Run the tests on any PC: `pip install numpy pyserial paho-mqtt pytest && python -m pytest`.
+Run the tests on any PC: `pip install -r requirements-dev.txt && python -m pytest`
+(prints a coverage report; add `--cov-report=html` for a browsable one).
+
+CI (`.github/workflows/tests.yml`) runs the suite on the self-hosted runner `DAVIN-PC-GARAGE-PI` for every
+push and pull request, fails below 90 % coverage, and on `main` refreshes `badges/coverage.svg` (the badge
+above) via `scripts/coverage_badge.py`.
 
 The Pi runs the same detection code as the laptop app, headless, and drives the garage outputs:
 one GPIO per stall to an ESP32, a "system OK" GPIO, a NeoPixel bar, MQTT / Home Assistant,
