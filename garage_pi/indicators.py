@@ -10,10 +10,22 @@ UART (detector GPIO21 -> Pi RXD, header pin 10, 115200 baud):
                                                     the indicator's first exchange)
 
 A battery_mv of 0 means "not measured". Other lines (boot noise) are ignored.
+
+The detector also keeps each stall's indicator MAC address in its flash and reports it, and the Pi
+can replace it (the detector saves it, echoes it back and restarts to use it):
+
+    MAC stall=1 addr=aa:bb:cc:dd:ee:ff              the saved address ("none": the stall has no indicator)
+    ERR what=<reason>                               a command was refused
+
+Commands from the Pi, one line each:
+
+    MAC?                                            report every saved address now
+    SETMAC stall=1 addr=aa:bb:cc:dd:ee:ff           save an address ("none" clears it)
 """
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 
@@ -36,24 +48,48 @@ def battery_percent(mv: int) -> int | None:
     return 100
 
 
+MAC_RE = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
+
+
+def normalize_mac(text: str) -> str:
+    """"aa:bb:cc:dd:ee:ff" in lowercase, or "" for blank / "none"; ValueError if malformed."""
+    text = str(text or "").strip()
+    if text.lower() in ("", "none"):
+        return ""
+    if not MAC_RE.match(text):
+        raise ValueError(f"{text!r} is not a MAC address like aa:bb:cc:dd:ee:ff")
+    return text.lower()
+
+
 def parse_line(line: str) -> dict | None:
-    """Fields of one detector report line, with "stall" as an int; None for anything else."""
+    """Fields of one detector report line, with "stall" as an int; None for anything else.
+
+    "kind" is "IND" for an indicator report, "MAC" for a saved address (as "addr", "" when none) and
+    "ERR" for a refused command.
+    """
     parts = line.strip().split()
-    if not parts or parts[0] != "IND":
+    if not parts or parts[0] not in ("IND", "MAC", "ERR"):
         return None
+    kind = parts[0]
     fields = {}
     for part in parts[1:]:
         key, sep, value = part.partition("=")
         if not sep:
             return None
         fields[key] = value
+    if kind == "ERR":
+        return {"kind": kind, "what": fields.get("what", "")} if "what" in fields else None
     try:
         fields["stall"] = int(fields["stall"])
         for key in ("battery_mv", "age_s"):
             if key in fields:
                 fields[key] = int(fields[key])
+        if kind == "MAC":
+            fields["addr"] = normalize_mac(fields["addr"])
     except (KeyError, ValueError):
         return None
+    if kind != "IND":
+        fields["kind"] = kind
     return fields
 
 
@@ -64,18 +100,27 @@ class IndicatorStatus:
         self.n = n_stalls
         self._clock = clock
         self._lock = threading.Lock()
-        self._stalls = [{"contact": "unknown", "battery_mv": None, "last_state": None, "last_exchange": None}
-                        for _ in range(n_stalls)]
+        self._stalls = [{"contact": "unknown", "battery_mv": None, "last_state": None, "last_exchange": None,
+                         "mac": None} for _ in range(n_stalls)]
         self.last_line_wall: float | None = None
+        self.last_error = ""  # the detector's last refusal of a command
 
     def apply(self, report: dict) -> bool:
         """Apply one parsed report; True if the stall's published values changed."""
+        now = self._clock()
+        if report.get("kind") == "ERR":
+            with self._lock:
+                self.last_line_wall = now
+                self.last_error = report["what"]
+            return False
         i = report["stall"] - 1
         if not 0 <= i < self.n:
             return False
-        now = self._clock()
         with self._lock:
             self.last_line_wall = now
+            if report.get("kind") == "MAC":  # not published to MQTT
+                self._stalls[i]["mac"] = report["addr"]
+                return False
             s = self._stalls[i]
             before = self._published(s)
             if "contact" in report:
@@ -107,6 +152,7 @@ class IndicatorStatus:
                     "battery_pct": None if mv is None else battery_percent(mv),
                     "last_state": s["last_state"],
                     "last_exchange_age_s": None if s["last_exchange"] is None else round(now - s["last_exchange"]),
+                    "mac": s["mac"],  # saved in the detector; None until it has reported
                 })
             return out
 
@@ -120,6 +166,8 @@ class IndicatorLink:
         self.status = status
         self.on_change = on_change
         self.error = ""
+        self._serial = None  # the open port, while there is one
+        self._write_lock = threading.Lock()
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, name="indicator-link", daemon=True)
         self._thread.start()
@@ -136,6 +184,8 @@ class IndicatorLink:
                 with serial.Serial(self.port, self.baud, timeout=1) as port:
                     self.error = ""
                     log.info("reading indicator reports on %s", self.port)
+                    self._serial = port
+                    self._send("MAC?")  # learn the saved addresses without waiting for the next summary
                     buf = b""
                     while not self._stop.is_set():
                         buf += port.read(256)
@@ -147,6 +197,27 @@ class IndicatorLink:
                     log.warning("indicator report port %s: %s", self.port, e)
                 self.error = str(e)
                 self._stop.wait(10)
+            finally:
+                self._serial = None
+
+    def _send(self, text: str) -> None:
+        port = self._serial
+        if port is None:
+            raise RuntimeError(f"not connected to the detector on {self.port}")
+        with self._write_lock:
+            port.write(text.encode("ascii") + b"\n")
+
+    def set_mac(self, stall: int, addr: str) -> str:
+        """Ask the detector to save the stall's (1-based) indicator MAC address ("" clears it).
+
+        The detector echoes the saved address back and restarts to use it. Returns the normalized address.
+        Raises ValueError for a bad stall or address, RuntimeError if the detector is not connected.
+        """
+        if not 1 <= stall <= self.status.n:
+            raise ValueError(f"stall must be 1 to {self.status.n}")
+        addr = normalize_mac(addr)
+        self._send(f"SETMAC stall={stall} addr={addr or 'none'}")
+        return addr
 
     def feed(self, line: str) -> None:
         report = parse_line(line)

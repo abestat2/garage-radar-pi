@@ -378,9 +378,16 @@ def test_indicator_link_feed_calls_on_change_only_for_changes():
 def test_indicator_link_reads_lines_from_serial(monkeypatch):
     import serial
 
+    ports = []
+
     class Port:
         def __init__(self, *a, **k):
             self.chunks = [b"IND stall=1 state=Pre", b"sent battery_mv=4000\nIND stall=3 contact=lost\n"]
+            self.written = []
+            ports.append(self)
+
+        def write(self, data):
+            self.written.append(data)
 
         def __enter__(self):
             return self
@@ -398,6 +405,7 @@ def test_indicator_link_reads_lines_from_serial(monkeypatch):
     try:
         assert wait_for(lambda: status.snapshot()[0]["battery_v"] == 4.0 and status.snapshot()[2]["contact"] == "lost")
         assert link.error == "" and link.baud == 9600
+        assert ports[0].written == [b"MAC?\n"]  # asks for the detector's saved addresses on connecting
     finally:
         link.close()
 

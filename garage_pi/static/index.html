@@ -127,6 +127,11 @@ textarea { width: 100%; min-height: 120px; font-family: var(--mono); font-size: 
       <h2>Settings</h2>
       <p class="muted">Saved to config.json. GPIO, LED, MQTT and port changes apply after restarting the service
         (<span class="mono">sudo systemctl restart garage-radar</span>).</p>
+      <h2 style="margin:16px 0 8px">Indicator MAC addresses</h2>
+      <p class="muted">Saved in the detector's flash, so they survive power loss. Each indicator logs its MAC address at
+        startup. Saving a changed address restarts the detector for a few seconds. Leave blank for a stall with no indicator.</p>
+      <div class="form" id="macs"></div>
+      <div class="row"><span id="macmsg" class="muted"></span></div>
       <div id="settings"></div>
       <div class="row"><button class="act" onclick="saveSettings()">Save settings</button><span id="savemsg" class="muted"></span></div>
     </section>
@@ -285,7 +290,29 @@ async function poll() {
   catch (e) { $("#health").textContent = "no connection"; $("#health").style.background = "var(--err)"; }
 }
 // ---------------------------------------------------------------- settings
+// The addresses the detector has saved; each field is filled once, then left alone while being edited
+async function loadMacs() {
+  const s = last || await api("/api/status");
+  const stalls = s.indicators ? s.indicators.stalls : [];
+  $("#macs").innerHTML = stalls.map(x => `<label for="mac${x.stall}">Stall ${x.stall}</label>
+    <span class="row"><input type="text" class="mono" id="mac${x.stall}" placeholder="aa:bb:cc:dd:ee:ff"
+      value="${esc(x.mac || "")}" ${x.mac == null ? "disabled" : ""}>
+      <button class="act" onclick="saveMac(${x.stall})">Save</button></span>`).join("")
+    || '<span class="muted">Indicator reports are off</span>';
+  const waiting = stalls.some(x => x.mac == null);
+  $("#macmsg").textContent = waiting ? "Waiting for the detector to report its saved addresses…" : "";
+  if (waiting) setTimeout(() => { if (!$("[data-page=settings]").hidden) loadMacs(); }, 2000);
+}
+async function saveMac(stall) {
+  const mac = document.getElementById(`mac${stall}`).value.trim();
+  try {
+    const r = await api("/api/indicator_mac", {method: "POST", body: JSON.stringify({stall, mac})});
+    $("#macmsg").textContent = `Stall ${stall}: ${r.mac || "no indicator"} - ${r.note}`;
+    setTimeout(loadMacs, 6000);
+  } catch (e) { $("#macmsg").textContent = `Stall ${stall}: ${e.message}`; }
+}
 async function loadSettings() {
+  loadMacs();
   configCache = await api("/api/config");
   const sections = ["radar", "gpio", "leds", "mqtt", "web", "raw_stream", "reference", "recording", "performance"];
   $("#settings").innerHTML = sections.map(sec => `<h2 style="margin:16px 0 8px">${sec}</h2><div class="form">` +

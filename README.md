@@ -70,6 +70,7 @@ radar's actual draw with a USB meter.
 | Stall 3 (single door) | 22 | 15 | ESP32 input |
 | System OK | 23 | 16 | ESP32 input |
 | Indicator reports (RXD) | 15 | 10 | ESP32 detector TX (GPIO21) |
+| Indicator MAC addresses (TXD) | 14 | 8 | ESP32 detector RX (GPIO20) |
 | NeoPixel data (SPI0 MOSI) | 10 | 19 | 74AHCT125 → LED DIN |
 | Ground | — | 6, 9, 14, 20, 25 | ESP32 GND, LED GND, 5 V supply GND |
 
@@ -137,6 +138,11 @@ device appears with:
 | `sensor.radar_status` | ok / starting / radar offline (diagnostic) |
 | `sensor.stall_N_indicator_battery` | indicator battery %, estimated from its voltage (`sensor.stall_N_indicator_voltage`, diagnostic) |
 | `binary_sensor.stall_N_indicator_connected` | the detector is in contact with the stall's indicator (diagnostic) |
+
+**Indicator MAC addresses** are set on the web page under Settings → *Indicator MAC addresses*, not
+in the detector firmware. The Pi sends each address to the detector over the same UART (the TXD wire
+above); the detector saves it in its flash, so it survives power loss, and restarts for a few seconds
+to start serving the new indicator. The page shows what the detector reports as saved.
 
 Example automation trigger: *Event* → entity `event.stall_2` → event type `ENTERED`.
 
