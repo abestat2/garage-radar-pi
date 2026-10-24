@@ -11,7 +11,9 @@ UART (detector GPIO21 -> Pi RXD, header pin 10, 115200 baud):
 
 A battery_mv of 0 means "not measured". Other lines (boot noise) are ignored. Every IND line that
 carries a battery also carries min_mm= and max_mm=, the distance limits the indicator said it is
-using in its last request (0 and 0 until it has said).
+using in its last request (0 and 0 until it has said). A line for a completed exchange also carries
+distance_mm=, what the indicator's own lidar last measured, or distance_mm=nan when it did not
+measure (the lidar is only switched on while the indicator guides a car).
 
 The detector also keeps each stall's indicator MAC address in its flash and reports it, and the Pi
 can replace it (the detector saves it, echoes it back and restarts to use it):
@@ -114,6 +116,8 @@ def parse_line(line: str) -> dict | None:
         for key in ("battery_mv", "age_s", "min_mm", "max_mm"):
             if key in fields:
                 fields[key] = int(fields[key])
+        if "distance_mm" in fields:  # "nan": the indicator did not measure
+            fields["distance_mm"] = None if fields["distance_mm"].lower() == "nan" else int(fields["distance_mm"])
         if kind == "MAC":
             fields["addr"] = normalize_mac(fields["addr"])
         if kind == "DIST" and not {"min_mm", "max_mm"} <= fields.keys():
@@ -133,7 +137,7 @@ class IndicatorStatus:
         self._clock = clock
         self._lock = threading.Lock()
         self._stalls = [{"contact": "unknown", "battery_mv": None, "last_state": None, "last_exchange": None,
-                         "mac": None, "wanted": None, "active": None} for _ in range(n_stalls)]
+                         "mac": None, "wanted": None, "active": None, "distance_mm": None} for _ in range(n_stalls)]
         self.last_line_wall: float | None = None
         self.last_error = ""  # the detector's last refusal of a command
 
@@ -165,6 +169,7 @@ class IndicatorStatus:
             if "state" in report:  # an exchange just completed, so the indicator is in contact
                 s["contact"] = "ok"
                 s["last_state"] = report["state"]
+                s["distance_mm"] = report.get("distance_mm")  # None (nan) when the indicator did not measure
                 s["last_exchange"] = now
             if report.get("battery_mv", 0) > 0:
                 s["battery_mv"] = report["battery_mv"]
@@ -189,6 +194,7 @@ class IndicatorStatus:
                     "battery_pct": None if mv is None else battery_percent(mv),
                     "last_state": s["last_state"],
                     "last_exchange_age_s": None if s["last_exchange"] is None else round(now - s["last_exchange"]),
+                    "distance_mm": s["distance_mm"],  # what the indicator's lidar last measured; None: it was off
                     "mac": s["mac"],  # saved in the detector; None until it has reported
                     # Distance limits: held by the detector (None until it has reported; min_mm and
                     # max_mm 0 when none) and in use on the indicator (None until it has said)

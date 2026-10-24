@@ -129,3 +129,20 @@ def test_web_sets_indicator_limits(data_dir):
         svc.indicator_link = None
         web.close()
         svc.shutdown()
+
+
+def test_indicator_distance_is_a_number_or_nan():
+    assert parse_line("IND stall=1 state=Present battery_mv=3850 min_mm=300 max_mm=2000 distance_mm=1450")["distance_mm"] == 1450
+    assert parse_line("IND stall=1 state=Absent battery_mv=3850 min_mm=300 max_mm=2000 distance_mm=nan")["distance_mm"] is None
+    assert parse_line("IND stall=1 state=Absent battery_mv=3850 distance_mm=far") is None
+    assert "distance_mm" not in parse_line("IND stall=1 state=Absent battery_mv=3850")  # older detector firmware
+
+    st = IndicatorStatus(2)
+    assert st.snapshot()[0]["distance_mm"] is None
+    st.apply(parse_line("IND stall=1 state=Present battery_mv=3850 min_mm=300 max_mm=2000 distance_mm=1450"))
+    assert st.snapshot()[0]["distance_mm"] == 1450 and st.snapshot()[1]["distance_mm"] is None
+    # The periodic summary is not an exchange, so it neither sets nor clears the distance
+    st.apply(parse_line("IND stall=1 contact=ok battery_mv=3850 age_s=3 min_mm=300 max_mm=2000"))
+    assert st.snapshot()[0]["distance_mm"] == 1450
+    st.apply(parse_line("IND stall=1 state=Present battery_mv=3850 min_mm=300 max_mm=2000 distance_mm=nan"))
+    assert st.snapshot()[0]["distance_mm"] is None

@@ -207,8 +207,11 @@ function indicatorRows(ind) {
   const age = ind.last_exchange_age_s == null ? "" : `, last contact ${ind.last_exchange_age_s} s ago`;
   const contact = {ok: "connected", lost: "lost", unknown: "no report yet"}[ind.contact] || ind.contact;
   const color = ind.contact === "ok" ? "" : ' style="color:var(--err)"';
+  // The indicator's own lidar is only switched on to guide a car, so most of the time there is no reading
+  const distance = ind.distance_mm == null ? "nan (not measuring)" : `${ind.distance_mm} mm`;
   return `<b>Indicator</b><span${color}>${esc(contact + age)}</span>
-        <b>Battery</b><span>${esc(battery)}</span>`;
+        <b>Battery</b><span>${esc(battery)}</span>
+        <b>Indicator distance</b><span>${esc(distance)}</span>`;
 }
 
 // A simulated arrival on the stall's ESP pin (the radar state above stays real)
