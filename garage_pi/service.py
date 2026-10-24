@@ -432,6 +432,7 @@ class GarageService:
             "system_ok_pin": {"gpio": self.gpio.ok_pin_number, "ok": self.gpio.ok},
             "indicators": {"port": self.indicator_link.port if self.indicator_link else None,
                            "error": self.indicator_link.error if self.indicator_link else "",
+                           "detector_error": self.indicators.last_error,
                            "stalls": self.indicators.snapshot()},
             "events": self.events[:30],
             "reference": {"source": self.reference_source,

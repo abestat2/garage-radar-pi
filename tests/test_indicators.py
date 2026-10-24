@@ -102,3 +102,91 @@ def test_service_publishes_indicator_changes(data_dir):
         assert svc.snapshot()["indicators"]["stalls"][1]["contact"] == "lost"
     finally:
         svc.shutdown()
+
+
+def test_mac_reports_and_errors_parse():
+    assert parse_line("MAC stall=2 addr=B4:3A:45:6B:FF:90\r") == {"kind": "MAC", "stall": 2, "addr": "b4:3a:45:6b:ff:90"}
+    assert parse_line("MAC stall=3 addr=none") == {"kind": "MAC", "stall": 3, "addr": ""}
+    assert parse_line("ERR what=addr") == {"kind": "ERR", "what": "addr"}
+    for junk in ("MAC stall=1 addr=nonsense", "MAC stall=1", "MAC addr=aa:bb:cc:dd:ee:ff", "ERR", "ERR broken"):
+        assert parse_line(junk) is None
+
+
+def test_status_keeps_the_detectors_saved_macs_and_errors():
+    st = IndicatorStatus(3)
+    assert [s["mac"] for s in st.snapshot()] == [None, None, None]  # nothing reported yet
+    assert not st.apply(parse_line("MAC stall=1 addr=58:8c:81:04:72:b4"))  # not an MQTT-published change
+    assert not st.apply(parse_line("MAC stall=2 addr=none"))
+    assert [s["mac"] for s in st.snapshot()] == ["58:8c:81:04:72:b4", "", None]
+    assert not st.apply(parse_line("MAC stall=9 addr=none"))  # no such stall
+    st.apply(parse_line("ERR what=addr"))
+    assert st.last_error == "addr"
+
+
+def test_set_mac_sends_a_command_to_the_detector():
+    from garage_pi.indicators import IndicatorLink
+
+    class Port:
+        def __init__(self):
+            self.written = []
+
+        def write(self, data):
+            self.written.append(data)
+
+    link = IndicatorLink({"port": "/dev/null"}, IndicatorStatus(3))
+    link.close()
+    with pytest.raises(RuntimeError):
+        link.set_mac(1, "aa:bb:cc:dd:ee:ff")  # no open port
+    link._serial = port = Port()
+    assert link.set_mac(1, "AA:BB:CC:DD:EE:FF") == "aa:bb:cc:dd:ee:ff"
+    assert link.set_mac(3, "") == ""
+    assert port.written == [b"SETMAC stall=1 addr=aa:bb:cc:dd:ee:ff\n", b"SETMAC stall=3 addr=none\n"]
+    for stall, addr in ((0, "aa:bb:cc:dd:ee:ff"), (4, "aa:bb:cc:dd:ee:ff"), (1, "aa:bb:cc:dd:ee"), (1, "zz:bb:cc:dd:ee:ff")):
+        with pytest.raises(ValueError):
+            link.set_mac(stall, addr)
+    assert len(port.written) == 2
+
+
+def test_web_sets_an_indicator_mac(data_dir):
+    import urllib.error
+    import urllib.request
+
+    from garage_pi.service import GarageService
+    from garage_pi.web import WebServer
+
+    svc = GarageService(data_dir, lambda s, c: None, use_hardware=False)
+    web = WebServer(svc, 0, host="127.0.0.1")
+
+    def post(body):
+        req = urllib.request.Request(f"http://127.0.0.1:{web.port}/api/indicator_mac", json.dumps(body).encode())
+        try:
+            r = urllib.request.urlopen(req, timeout=5)
+            return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    class FakeLink:
+        port = "fake"
+        error = ""
+        sent = []
+
+        def set_mac(self, stall, addr):
+            from garage_pi.indicators import normalize_mac
+
+            self.sent.append((stall, normalize_mac(addr)))
+            return normalize_mac(addr)
+
+    try:
+        assert post({"stall": 1, "mac": "aa:bb:cc:dd:ee:ff"})[0] == 409  # no link to the detector
+        svc.indicator_link = FakeLink()
+        code, body = post({"stall": 2, "mac": "B4:3A:45:6B:FF:90"})
+        assert code == 200 and body["mac"] == "b4:3a:45:6b:ff:90"
+        assert post({"stall": 3, "mac": ""})[0] == 200
+        assert post({"stall": 1, "mac": "bogus"})[0] == 400
+        assert FakeLink.sent == [(2, "b4:3a:45:6b:ff:90"), (3, "")]
+        assert svc.snapshot()["indicators"]["stalls"][0]["mac"] is None
+        assert "detector_error" in svc.snapshot()["indicators"]
+    finally:
+        svc.indicator_link = None
+        web.close()
+        svc.shutdown()
