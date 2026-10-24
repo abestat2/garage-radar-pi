@@ -144,6 +144,14 @@ in the detector firmware. The Pi sends each address to the detector over the sam
 above); the detector saves it in its flash, so it survives power loss, and restarts for a few seconds
 to start serving the new indicator. The page shows what the detector reports as saved.
 
+**Indicator distances** (Settings → *Indicator distances*) set where each indicator's LED bar works
+between: at the *full-bar* distance or farther the whole bar is green, it shrinks to one LED at the
+*stop* distance, and closer than that it is red (30 to 4000 mm, stop below full-bar). The Pi sends
+them to the detector, which keeps them and hands them to the indicator in its next reply; the
+indicator saves them in its own flash, so they survive deep sleep and power loss. The page shows
+what the indicator reports using and whether a change is still waiting for its next wake. Blank
+fields go back to the indicator's built-in (menuconfig) values.
+
 Example automation trigger: *Event* → entity `event.stall_2` → event type `ENTERED`.
 
 Raw topics are under `garage_radar/<device_id>/…`, documented in `garage_pi/mqtt_ha.py`.

@@ -5,7 +5,8 @@
     GET  /api/config                settings (passwords masked)
     POST /api/config                {"section": {...}}  -> saved; service restarts its outputs
     POST /api/indicator_mac         {"stall": N, "mac": "aa:bb:cc:dd:ee:ff" | ""}  -> saved in the detector's flash
-    POST /api/command             {"cmd": "record"|"stop_record"|"fit"|"revert_reference"|"reconnect"|
+    POST /api/indicator_limits      {"stall": N, "min_mm": 300, "max_mm": 2000}  -> the indicator's stop / full-bar distances
+    POST /api/command           {"cmd": "record"|"stop_record"|"fit"|"revert_reference"|"reconnect"|
                                              "reload"|"led_test"|"remove_label"|
                                              "simulate_arrival" (+ "stall": N)|"stop_simulation", ...}
     GET  /api/recordings            list
@@ -182,6 +183,18 @@ def make_handler(service):
                         return self._json({"error": str(e)}, 409)
                     return self._json({"ok": True, "mac": addr,
                                        "note": "sent to the detector, which saves it and restarts for a few seconds"})
+                if p == "/api/indicator_limits":
+                    c = json.loads(body or b"{}")
+                    if service.indicator_link is None:
+                        return self._json({"error": "indicator reports are off (no link to the detector)"}, 409)
+                    try:
+                        lo, hi = service.indicator_link.set_limits(int(c.get("stall", 0)), c.get("min_mm"), c.get("max_mm"))
+                    except ValueError as e:
+                        return self._json({"error": str(e)}, 400)
+                    except RuntimeError as e:
+                        return self._json({"error": str(e)}, 409)
+                    return self._json({"ok": True, "min_mm": lo, "max_mm": hi,
+                                       "note": "saved in the detector; the indicator takes it over on its next wake"})
                 if p == "/api/radar_config":
                     text = body.decode()
                     RadarConfig(text).derived()  # validate it parses

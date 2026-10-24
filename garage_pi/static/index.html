@@ -132,6 +132,13 @@ textarea { width: 100%; min-height: 120px; font-family: var(--mono); font-size: 
         startup. Saving a changed address restarts the detector for a few seconds. Leave blank for a stall with no indicator.</p>
       <div class="form" id="macs"></div>
       <div class="row"><span id="macmsg" class="muted"></span></div>
+      <h2 style="margin:16px 0 8px">Indicator distances</h2>
+      <p class="muted">Where each indicator's LED bar works between. At the <b>full-bar</b> distance or farther the whole
+        bar is green; it shrinks to one LED at the <b>stop</b> distance, and closer than that the bar is red.
+        The detector keeps these and the indicator takes them over, and saves them in its own flash, on its next wake
+        (up to the request interval). Leave both blank to go back to the indicator's built-in values.</p>
+      <div class="form" id="limits"></div>
+      <div class="row"><span id="limmsg" class="muted"></span></div>
       <div id="settings"></div>
       <div class="row"><button class="act" onclick="saveSettings()">Save settings</button><span id="savemsg" class="muted"></span></div>
     </section>
@@ -214,6 +221,8 @@ function simulationRow(sim) {
 
 function renderStatus(s) {
   const st = s.status;
+  // Keep the distance status text current without touching the fields being edited
+  if (s.indicators) s.indicators.stalls.forEach(x => { const el = document.getElementById(`limstatus${x.stall}`); if (el) el.textContent = limitStatus(x); });
   const h = $("#health"); h.textContent = st.health;
   h.style.background = st.health === "ok" ? "var(--ok)" : st.health === "starting" ? "var(--enter)" : "var(--err)";
   $("#fps").textContent = `${st.frame_rate.toFixed(1)} frames/s`;
@@ -311,8 +320,44 @@ async function saveMac(stall) {
     setTimeout(loadMacs, 6000);
   } catch (e) { $("#macmsg").textContent = `Stall ${stall}: ${e.message}`; }
 }
+// Distance limits: what the detector holds for each stall and what its indicator reports using
+function limitStatus(x) {
+  const range = l => `${l.min_mm}-${l.max_mm} mm`;
+  const wanted = x.limits_wanted && x.limits_wanted.max_mm ? x.limits_wanted : null;
+  const active = x.limits_active;
+  let text = active ? `in use on the indicator: ${range(active)}` : "the indicator has not reported its distances yet";
+  if (wanted && (!active || wanted.min_mm !== active.min_mm || wanted.max_mm !== active.max_mm)) {
+    text += `; waiting for its next wake to change to ${range(wanted)}`;
+  } else if (!wanted && x.limits_wanted) {
+    text += " (none saved, so its built-in values)";
+  }
+  return text;
+}
+async function loadLimits() {
+  const s = last || await api("/api/status");
+  const stalls = s.indicators ? s.indicators.stalls : [];
+  $("#limits").innerHTML = stalls.map(x => {
+    const w = x.limits_wanted && x.limits_wanted.max_mm ? x.limits_wanted : {min_mm: "", max_mm: ""};
+    return `<label for="limmin${x.stall}">Stall ${x.stall}</label>
+    <span class="row"><input type="number" id="limmin${x.stall}" placeholder="stop mm" value="${w.min_mm}" ${x.limits_wanted ? "" : "disabled"}>
+      <input type="number" id="limmax${x.stall}" placeholder="full bar mm" value="${w.max_mm}" ${x.limits_wanted ? "" : "disabled"}>
+      <button class="act" onclick="saveLimits(${x.stall})">Save</button></span>
+    <span></span><span class="muted" id="limstatus${x.stall}">${esc(limitStatus(x))}</span>`;
+  }).join("") || '<span class="muted">Indicator reports are off</span>';
+  const waiting = stalls.some(x => x.limits_wanted == null);
+  if (waiting) setTimeout(() => { if (!$("[data-page=settings]").hidden) loadLimits(); }, 2000);
+}
+async function saveLimits(stall) {
+  const min_mm = Number(document.getElementById(`limmin${stall}`).value || 0);
+  const max_mm = Number(document.getElementById(`limmax${stall}`).value || 0);
+  try {
+    const r = await api("/api/indicator_limits", {method: "POST", body: JSON.stringify({stall, min_mm, max_mm})});
+    $("#limmsg").textContent = `Stall ${stall}: ${r.min_mm ? r.min_mm + "-" + r.max_mm + " mm" : "built-in values"} - ${r.note}`;
+  } catch (e) { $("#limmsg").textContent = `Stall ${stall}: ${e.message}`; }
+}
 async function loadSettings() {
   loadMacs();
+  loadLimits();
   configCache = await api("/api/config");
   const sections = ["radar", "gpio", "leds", "mqtt", "web", "raw_stream", "reference", "recording", "performance"];
   $("#settings").innerHTML = sections.map(sec => `<h2 style="margin:16px 0 8px">${sec}</h2><div class="form">` +

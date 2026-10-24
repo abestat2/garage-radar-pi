@@ -9,7 +9,9 @@ UART (detector GPIO21 -> Pi RXD, header pin 10, 115200 baud):
     IND stall=1 contact=ok battery_mv=3850 age_s=12 periodic summary (battery_mv 0 / age_s -1 until
                                                     the indicator's first exchange)
 
-A battery_mv of 0 means "not measured". Other lines (boot noise) are ignored.
+A battery_mv of 0 means "not measured". Other lines (boot noise) are ignored. Every IND line that
+carries a battery also carries min_mm= and max_mm=, the distance limits the indicator said it is
+using in its last request (0 and 0 until it has said).
 
 The detector also keeps each stall's indicator MAC address in its flash and reports it, and the Pi
 can replace it (the detector saves it, echoes it back and restarts to use it):
@@ -21,6 +23,14 @@ Commands from the Pi, one line each:
 
     MAC?                                            report every saved address now
     SETMAC stall=1 addr=aa:bb:cc:dd:ee:ff           save an address ("none" clears it)
+
+The detector also keeps the distances each indicator's LED bar works between (stop distance and
+full-bar distance), and the indicator takes them over, and saves them in its own flash, on its next
+wake. The detector reports and accepts them like the addresses:
+
+    DIST stall=1 min_mm=300 max_mm=2000             the limits saved for the stall (0 and 0: none)
+    DIST?                                           report every stall's limits now
+    SETDIST stall=1 min_mm=300 max_mm=2000          save limits (0 and 0 clears them)
 """
 from __future__ import annotations
 
@@ -48,6 +58,26 @@ def battery_percent(mv: int) -> int | None:
     return 100
 
 
+# What the indicator's lidar can usefully report; the detector and indicator refuse anything else
+LIMIT_LOWEST_MM = 30
+LIMIT_HIGHEST_MM = 4000
+
+
+def check_limits(min_mm, max_mm) -> tuple[int, int]:
+    """The stop and full-bar distances as ints, (0, 0) meaning "none"; ValueError if not usable."""
+    try:
+        if isinstance(min_mm, bool) or isinstance(max_mm, bool):
+            raise TypeError
+        lo, hi = int(min_mm or 0), int(max_mm or 0)
+    except (TypeError, ValueError):
+        raise ValueError("distances must be whole numbers of millimetres") from None
+    if (lo, hi) == (0, 0):
+        return 0, 0
+    if not LIMIT_LOWEST_MM <= lo < hi <= LIMIT_HIGHEST_MM:
+        raise ValueError(f"need {LIMIT_LOWEST_MM} <= min < max <= {LIMIT_HIGHEST_MM} mm")
+    return lo, hi
+
+
 MAC_RE = re.compile(r"^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$")
 
 
@@ -64,11 +94,11 @@ def normalize_mac(text: str) -> str:
 def parse_line(line: str) -> dict | None:
     """Fields of one detector report line, with "stall" as an int; None for anything else.
 
-    "kind" is "IND" for an indicator report, "MAC" for a saved address (as "addr", "" when none) and
-    "ERR" for a refused command.
+    "kind" is "IND" for an indicator report, "MAC" for a saved address (as "addr", "" when none),
+    "DIST" for the distance limits saved for a stall (min_mm, max_mm) and "ERR" for a refused command.
     """
     parts = line.strip().split()
-    if not parts or parts[0] not in ("IND", "MAC", "ERR"):
+    if not parts or parts[0] not in ("IND", "MAC", "DIST", "ERR"):
         return None
     kind = parts[0]
     fields = {}
@@ -81,11 +111,13 @@ def parse_line(line: str) -> dict | None:
         return {"kind": kind, "what": fields.get("what", "")} if "what" in fields else None
     try:
         fields["stall"] = int(fields["stall"])
-        for key in ("battery_mv", "age_s"):
+        for key in ("battery_mv", "age_s", "min_mm", "max_mm"):
             if key in fields:
                 fields[key] = int(fields[key])
         if kind == "MAC":
             fields["addr"] = normalize_mac(fields["addr"])
+        if kind == "DIST" and not {"min_mm", "max_mm"} <= fields.keys():
+            return None
     except (KeyError, ValueError):
         return None
     if kind != "IND":
@@ -101,7 +133,7 @@ class IndicatorStatus:
         self._clock = clock
         self._lock = threading.Lock()
         self._stalls = [{"contact": "unknown", "battery_mv": None, "last_state": None, "last_exchange": None,
-                         "mac": None} for _ in range(n_stalls)]
+                         "mac": None, "wanted": None, "active": None} for _ in range(n_stalls)]
         self.last_line_wall: float | None = None
         self.last_error = ""  # the detector's last refusal of a command
 
@@ -121,7 +153,12 @@ class IndicatorStatus:
             if report.get("kind") == "MAC":  # not published to MQTT
                 self._stalls[i]["mac"] = report["addr"]
                 return False
+            if report.get("kind") == "DIST":
+                self._stalls[i]["wanted"] = (report["min_mm"], report["max_mm"])
+                return False
             s = self._stalls[i]
+            if report.get("min_mm", 0) > 0 and report.get("max_mm", 0) > 0:
+                s["active"] = (report["min_mm"], report["max_mm"])
             before = self._published(s)
             if "contact" in report:
                 s["contact"] = report["contact"]
@@ -153,6 +190,10 @@ class IndicatorStatus:
                     "last_state": s["last_state"],
                     "last_exchange_age_s": None if s["last_exchange"] is None else round(now - s["last_exchange"]),
                     "mac": s["mac"],  # saved in the detector; None until it has reported
+                    # Distance limits: held by the detector (None until it has reported; min_mm and
+                    # max_mm 0 when none) and in use on the indicator (None until it has said)
+                    "limits_wanted": None if s["wanted"] is None else {"min_mm": s["wanted"][0], "max_mm": s["wanted"][1]},
+                    "limits_active": None if s["active"] is None else {"min_mm": s["active"][0], "max_mm": s["active"][1]},
                 })
             return out
 
@@ -185,7 +226,9 @@ class IndicatorLink:
                     self.error = ""
                     log.info("reading indicator reports on %s", self.port)
                     self._serial = port
-                    self._send("MAC?")  # learn the saved addresses without waiting for the next summary
+                    # Learn the saved addresses and limits without waiting for the next summary
+                    self._send("MAC?")
+                    self._send("DIST?")
                     buf = b""
                     while not self._stop.is_set():
                         buf += port.read(256)
@@ -218,6 +261,19 @@ class IndicatorLink:
         addr = normalize_mac(addr)
         self._send(f"SETMAC stall={stall} addr={addr or 'none'}")
         return addr
+
+    def set_limits(self, stall: int, min_mm, max_mm) -> tuple[int, int]:
+        """Ask the detector to hold the stall's (1-based) indicator stop and full-bar distances.
+
+        The indicator takes them over, and saves them, on its next wake. (0, 0) clears them. Returns the
+        distances as ints. Raises ValueError for a bad stall or distances, RuntimeError if the detector
+        is not connected.
+        """
+        if not 1 <= stall <= self.status.n:
+            raise ValueError(f"stall must be 1 to {self.status.n}")
+        lo, hi = check_limits(min_mm, max_mm)
+        self._send(f"SETDIST stall={stall} min_mm={lo} max_mm={hi}")
+        return lo, hi
 
     def feed(self, line: str) -> None:
         report = parse_line(line)

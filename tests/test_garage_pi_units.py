@@ -405,7 +405,7 @@ def test_indicator_link_reads_lines_from_serial(monkeypatch):
     try:
         assert wait_for(lambda: status.snapshot()[0]["battery_v"] == 4.0 and status.snapshot()[2]["contact"] == "lost")
         assert link.error == "" and link.baud == 9600
-        assert ports[0].written == [b"MAC?\n"]  # asks for the detector's saved addresses on connecting
+        assert ports[0].written == [b"MAC?\n", b"DIST?\n"]  # asks for the detector's saved settings on connecting
     finally:
         link.close()
 
